@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Follow a URL to the Database</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+
+<p class="kicker">Lesson 0001 · ~15 min · Navigating the repo</p>
+<h1>Follow a URL to the database</h1>
+<p class="subtitle">This repo has controllers, services and an ORM, like a Spring app. They just live in different places.</p>
+
+<div class="win">
+  <strong>Your win today</strong>
+  Pick any URL in the app and name, within a minute, the file that handles it, the function that loads its data, and the service it calls. That's what you need to give Claude Code a precise prompt.
+</div>
+
+<!-- ─────────────────────────────────────────── -->
+<h2><span class="step">1 · The big picture</span>One request, five layers</h2>
+
+<p>When the browser asks for <code>/courses/intro-to-react</code>, this is what runs. Green layers run <strong>only on the server</strong>. The red one runs on the server <em>and</em> in the browser.</p>
+
+<ol class="flow">
+  <li class="server"><span class="where">app/routes.ts</span><span class="layer">Route table</span>
+    Matches the URL pattern <code>courses/:slug</code> to a file.
+    <span class="side">≈ all your <code>@RequestMapping</code>s collected in one list</span></li>
+  <li class="server"><span class="where">app/routes/courses.$slug.tsx</span><span class="layer">loader()</span>
+    Reads <code>params.slug</code>, calls services and returns a plain object.
+    <span class="side">≈ a <code>@GetMapping</code> method that builds the model</span></li>
+  <li class="server"><span class="where">app/services/courseService.ts</span><span class="layer">Service functions</span>
+    <code>getCourseBySlug(slug)</code>, plus the rest of the business logic. Each service has a <code>.test.ts</code> next to it.
+    <span class="side">≈ a <code>@Service</code> class</span></li>
+  <li class="server"><span class="where">app/db/schema.ts + drizzle/</span><span class="layer">Drizzle ORM → SQLite</span>
+    Tables are defined in TypeScript and queried with a SQL-shaped API. The file <code>data.db</code> is the database.
+    <span class="side">≈ entities + Flyway migrations, queried jOOQ-style</span></li>
+  <li class="client"><span class="where">same file: export default</span><span class="layer">Component</span>
+    Gets the loader's return value as <code>loaderData</code> and returns the HTML (JSX).
+    <span class="side">≈ the Thymeleaf template, if you squint</span></li>
+</ol>
+
+<p>The surprising part: <strong>the "controller" and the "view" are in the same file.</strong> React Router calls this a <a href="https://reactrouter.com/start/framework/route-module">route module</a>: "The files referenced in <code>routes.ts</code> are called Route Modules." Its <code>loader</code> is "only called on the server" (<a href="https://reactrouter.com/start/framework/route-module">docs</a>), so a file in <code>app/routes/</code> can safely call the database.</p>
+
+<!-- ─────────────────────────────────────────── -->
+<h2><span class="step">2 · Your Spring map</span>Analogies, and where each one breaks</h2>
+
+<div class="table-wrap">
+<table>
+  <tr><th>In this repo</th><th>Spring equivalent</th><th>Where it breaks</th></tr>
+  <tr><td><code>app/routes.ts</code></td><td><code>@RequestMapping</code> table</td><td>It's one explicit list, not annotations scattered across classes.</td></tr>
+  <tr><td><code>export async function loader</code></td><td><code>@GetMapping</code></td><td>It returns <em>data</em>, not a view name. The default-export component in the same file always renders it.</td></tr>
+  <tr><td><code>export async function action</code></td><td><code>@PostMapping</code></td><td>After it runs, React Router automatically re-runs the loaders on the page (<a href="https://reactrouter.com/start/framework/route-module">docs</a>).</td></tr>
+  <tr><td><code>app/services/*.ts</code></td><td><code>@Service</code></td><td>No beans and no DI. They're plain exported functions, and routes <code>import</code> them directly.</td></tr>
+  <tr><td>Drizzle (<code>schema.ts</code>)</td><td>JPA <code>@Entity</code></td><td>No entity manager, lazy loading or dirty checking. It's closer to jOOQ: "If you know SQL, you know Drizzle" (<a href="https://orm.drizzle.team/docs/overview">docs</a>).</td></tr>
+  <tr><td><code>drizzle/0000_*.sql</code></td><td>Flyway migrations</td><td>Holds up well. They're generated from <code>schema.ts</code> by <code>npm run db:generate</code>.</td></tr>
+  <tr><td>default-export component</td><td>Thymeleaf template</td><td>It renders on the server, <em>then runs again in the browser</em> so that clicks and state work. Templates never do that.</td></tr>
+</table>
+</div>
+
+<div class="breaks">In Spring, "is this server code or browser code?" is decided by which <em>project</em> a file is in. Here it's decided by which <em>export</em> in the same file you're looking at. <code>loader</code>/<code>action</code> run on the server. The component runs in both places. Files named <code>*.server.ts</code> (for example <code>app/lib/markdown.server.ts</code>) are server-only.</div>
+
+<!-- ─────────────────────────────────────────── -->
+<h2><span class="step">3 · Read a real one</span><code>app/routes/courses.$slug.tsx</code>, trimmed</h2>
+
+<p>The file name follows the URL: <code>.</code> means <code>/</code> and <code>$slug</code> means <code>:slug</code>. That's a naming <em>convention</em> in this repo. The actual mapping is the line in <code>routes.ts</code>:</p>
+
+<pre><code><span class="c">// app/routes.ts</span>
+<span class="hl">route("courses/:slug", "routes/courses.$slug.tsx"),</span></code></pre>
+
+<pre><code><span class="c">// app/routes/courses.$slug.tsx</span>
+import { getCourseBySlug, getCourseWithDetails } from "~/services/courseService";
+<span class="c">//       ^ "~/" is an alias for app/ (like a package root)</span>
+
+<span class="hl">export async function loader({ params, request }: Route.LoaderArgs) {</span>
+  const course = getCourseBySlug(params.slug);       <span class="c">// :slug from the URL</span>
+  if (!course) {
+    throw data("Course not found", { status: 404 });  <span class="c">// ≈ ResponseStatusException</span>
+  }
+  ...
+  return { course: courseWithDetails, enrolled, progress, ... };  <span class="c">// ≈ the model</span>
+}
+
+<span class="hl">export default function CourseDetail({ loaderData }) {</span>
+  <span class="c">// JSX: HTML-like syntax that reads loaderData.course.title etc.</span>
+}</code></pre>
+
+<p>And the service it calls is plain Drizzle. Read it as SQL:</p>
+<pre><code><span class="c">// app/services/courseService.ts</span>
+export function getCourseBySlug(slug: string) {
+  return db.select().from(courses).where(eq(courses.slug, slug)).get();
+}   <span class="c">// SELECT * FROM courses WHERE slug = ? LIMIT 1</span></code></pre>
+
+<!-- ─────────────────────────────────────────── -->
+<h2><span class="step">4 · Recall it</span>Quiz: answer from memory</h2>
+<p class="muted">Don't scroll up. The effort of remembering is what makes it stick. Your first click counts.</p>
+
+<div class="quiz">
+  <div class="q" data-answer="1">
+    <p>1. A user opens <code>/courses/intro-to-react/purchase</code>. Which file handles it?</p>
+    <div class="opts">
+      <button class="opt">app/routes/courses.$slug.tsx</button>
+      <button class="opt" data-why="routes.ts maps courses/:slug/purchase to routes/courses.$slug.purchase.tsx. In the file name, dots stand for slashes and $ marks a param.">app/routes/courses.$slug.purchase.tsx</button>
+      <button class="opt">app/services/purchaseService.ts</button>
+      <button class="opt">app/routes/purchase.$slug.tsx</button>
+    </div>
+  </div>
+
+  <div class="q" data-answer="3">
+    <p>2. Where does a route's <code>loader</code> run?</p>
+    <div class="opts">
+      <button class="opt">Only in the browser, after load</button>
+      <button class="opt">In both places on every request</button>
+      <button class="opt">Inside SQLite as stored procedures</button>
+      <button class="opt" data-why="The docs say loaders are only called on the server. That's why a file in app/routes/ can import services that talk to the database.">Only on the server, before rendering</button>
+    </div>
+  </div>
+
+  <div class="q" data-answer="2">
+    <p>3. The closest Spring equivalent of a route module's <code>action</code> export is…</p>
+    <div class="opts">
+      <button class="opt">@GetMapping handler returning page data</button>
+      <button class="opt">@Service bean holding business logic</button>
+      <button class="opt" data-why="action handles mutations, such as a form POST from &lt;Form&gt; or useFetcher. Unlike Spring, the page's loaders then re-run automatically.">@PostMapping handler handling form submissions</button>
+      <button class="opt">@Entity class mapped to database table</button>
+    </div>
+  </div>
+
+  <div class="q" data-answer="0">
+    <p>4. How does <code>courses.$slug.tsx</code> get hold of <code>courseService</code>?</p>
+    <div class="opts">
+      <button class="opt" data-why="There's no DI container. Services are plain exported functions, imported with a normal ES import from &quot;~/services/courseService&quot;.">It imports the exported functions directly</button>
+      <button class="opt">Spring injects it via the constructor</button>
+      <button class="opt">It fetches it from a registry</button>
+      <button class="opt">Drizzle generates it from the schema</button>
+    </div>
+  </div>
+
+  <div class="q" data-answer="3">
+    <p>5. Bug report: <em>"/dashboard shows the wrong progress %."</em> The dashboard loader calls <code>calculateProgress()</code>. Which file do you point Claude at first?</p>
+    <div class="opts">
+      <button class="opt">app/routes.ts</button>
+      <button class="opt">app/routes/dashboard.tsx</button>
+      <button class="opt">app/db/schema.ts</button>
+      <button class="opt" data-why="The loader only calls calculateProgress(). The logic, and its test file progressService.test.ts, live in the service. Point Claude at both the service and its test.">app/services/progressService.ts</button>
+    </div>
+  </div>
+</div>
+<p class="quiz-score"></p>
+
+<!-- ─────────────────────────────────────────── -->
+<h2><span class="step">5 · Do it in the repo</span>Trace <code>/dashboard</code> yourself (3 min)</h2>
+<p>Open <code>../ai-coding-crash-course</code> in your editor. No Claude yet, just your eyes:</p>
+<ul class="task">
+  <li>In <code>app/routes.ts</code>, find the line for <code>"dashboard"</code>. Which file does it point to? Notice that it's nested inside <code>layout("routes/layout.app.tsx", …)</code>.</li>
+  <li>Open that file and find <code>export async function loader</code>.</li>
+  <li>Read only the <code>import</code> lines at the top. Which two services does it use?</li>
+  <li>Find <code>export default function</code>. That's the "template".</li>
+</ul>
+<details>
+  <summary>Check your answer</summary>
+  <p><code>app/routes/dashboard.tsx</code>. Its loader is at line 20 and the default-export <code>Dashboard</code> component is at line 104. It imports <code>getUserEnrolledCourses</code> from <strong>enrollmentService</strong>, and <code>calculateProgress</code>, <code>getCompletedLessonCount</code>, <code>getTotalLessonCount</code> and <code>getNextIncompleteLesson</code> from <strong>progressService</strong>.</p>
+  <p>The <code>layout(…)</code> wrapper adds no URL segment. It wraps the page in shared chrome such as the sidebar (<a href="https://reactrouter.com/start/framework/routing">docs</a>). Think of it as a page decorator.</p>
+</details>
+
+<!-- ─────────────────────────────────────────── -->
+<h2><span class="step">6 · Steer</span>Turn the map into a prompt</h2>
+<p>Your win, put to use. Compare these two prompts for Claude Code:</p>
+<pre><code><span class="c">✗ vague</span>
+The course page shows the wrong lesson count, fix it.
+
+<span class="c">✓ steered</span>
+On /courses/:slug, the lesson count looks wrong. The loader in
+app/routes/courses.$slug.tsx calls getLessonCountForCourse from
+app/services/courseService.ts. Check the query there, add a failing
+test in courseService.test.ts first, then fix it.</code></pre>
+<p>The second prompt names the <strong>layer</strong> (service, not UI), the <strong>files</strong>, and how to <strong>verify</strong>. You can write it without knowing any React. The course builds on exactly this skill in its "Exploring the codebase" and "Steering" sections.</p>
+
+<div class="source">
+  <a href="https://reactrouter.com/start/framework/route-module"><strong>React Router docs: Route Module</strong></a>. Skim the <code>loader</code>, <code>action</code> and <code>default</code> sections only (5 min). It's the official source for everything in steps 1–3. If you have extra time, add <a href="https://reactrouter.com/start/framework/routing">Routing</a>.
+</div>
+
+<div class="ask">Anything unclear? Ask me in the terminal, for example "what does <code>throw data(…)</code> actually do?" or "show me an action in this repo". I'm your teacher for this course.</div>
+
+<p class="muted">Keep for later: <a href="../reference/request-flow.html">Reference: Request flow &amp; file map</a></p>
+
+<nav class="pager">
+  <span class="muted">← start</span>
+  <a href="./0002-read-a-component.html">Next: 0002 Read a component →</a>
+</nav>
+
+</main>
+</body>
+</html>

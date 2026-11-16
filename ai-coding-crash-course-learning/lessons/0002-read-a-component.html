@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Read a Component</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+
+<p class="kicker">Lesson 0002 · ~15 min · Reviewing UI diffs</p>
+<h1>Read a component like a Java method</h1>
+<p class="subtitle">Five patterns cover nearly everything inside a route's <code>export default</code>.</p>
+
+<div class="win">
+  <strong>Your win today</strong>
+  Look at a component Claude wrote or changed and say <em>what it renders, under which condition, and where each value comes from</em>. You'll also be able to spot one classic bug without knowing React.
+</div>
+
+<p>In <a href="./0001-follow-a-url-to-the-database.html">Lesson 1</a> you followed a URL down to the database. The loader's return value comes back up as <code>loaderData</code>. This lesson is about the last stop: the component that turns it into HTML.</p>
+
+<!-- ─────────────────────────────────────────── -->
+<h2><span class="step">1 · The one idea</span>A component is a function that returns markup</h2>
+
+<p>Here's the real dashboard from <code>app/routes/dashboard.tsx</code> (line 104), trimmed:</p>
+
+<pre><code><span class="hl">export default function Dashboard({ loaderData }: Route.ComponentProps) {</span>
+  const { inProgressCourses, completedCourses } = loaderData;  <span class="c">// destructuring</span>
+  const totalCourses = inProgressCourses.length + completedCourses.length;
+
+  return (
+    &lt;div className="mx-auto max-w-7xl p-6"&gt;
+      &lt;h1 className="text-3xl font-bold"&gt;My Dashboard&lt;/h1&gt;
+      ...
+    &lt;/div&gt;
+  );
+}</code></pre>
+
+<p>That's the whole model. It's a plain function: data comes in as a parameter and markup goes out as the return value. The HTML-looking part is <strong>JSX</strong>, "a syntax extension for JavaScript that lets you write HTML-like markup inside a JavaScript file" (<a href="https://react.dev/learn/writing-markup-with-jsx">react.dev</a>). It isn't a string. It's an expression the compiler turns into function calls.</p>
+
+<p>Two things you can skim past:</p>
+<ul>
+  <li><code>className="mx-auto p-6 …"</code> is styling (Tailwind CSS classes). It's <code>className</code> rather than <code>class</code> because "<code>class</code> is a reserved word" (<a href="https://react.dev/learn/writing-markup-with-jsx">react.dev</a>). Styling is out of scope for your mission, so read straight past it.</li>
+  <li><code>const { a, b } = loaderData</code> is <em>destructuring</em>: shorthand for <code>const a = loaderData.a; const b = loaderData.b;</code>.</li>
+</ul>
+
+<!-- ─────────────────────────────────────────── -->
+<h2><span class="step">2 · Five patterns</span>Each one has a Java twin</h2>
+
+<div class="pattern">
+<h3><span class="n">①</span><code>{expression}</code>: print a value</h3>
+<div class="pair">
+  <div><p class="label">Java</p><pre><code>"Progress: " + course.progress() + "%"</code></pre></div>
+  <div><p class="label">JSX</p><pre><code>&lt;span&gt;{course.progress}%&lt;/span&gt;</code></pre></div>
+</div>
+<p>Curly braces "open a window to JavaScript", and "any JavaScript expression will work between curly braces" (<a href="https://react.dev/learn/javascript-in-jsx-with-curly-braces">react.dev</a>). Inside an attribute it works the same way: <code>to={`/courses/${course.courseSlug}`}</code>. The backtick string with <code>${…}</code> is a template literal, like Java's <code>String.formatted</code>.</p>
+<p class="muted">The double braces in <code>style={{ width: "40%" }}</code> aren't special syntax. They're a JS object literal <code>{ width: … }</code> inside the window <code>{ }</code>.</p>
+</div>
+
+<div class="pattern">
+<h3><span class="n">②</span><code>cond ? &lt;A/&gt; : &lt;B/&gt;</code>: if / else</h3>
+<pre><code>{totalCourses === 0 ? (
+  &lt;div&gt;No enrolled courses … &lt;Button&gt;Browse Courses&lt;/Button&gt;&lt;/div&gt;
+) : (
+  &lt;div&gt; …the course sections… &lt;/div&gt;
+)}</code></pre>
+<p>It's the same ternary as Java. JSX has no <code>if</code> statement in the markup, so this is how you write if/else (<a href="https://react.dev/learn/conditional-rendering">react.dev</a>). A trick that helps: find the <code>?</code> and the <code>:</code>, and read the two branches as two separate screens.</p>
+</div>
+
+<div class="pattern">
+<h3><span class="n">③</span><code>cond &amp;&amp; &lt;A/&gt;</code>: if, else nothing</h3>
+<pre><code>{completedCourses.length &gt; 0 &amp;&amp; (
+  &lt;section&gt;&lt;h2&gt;Completed&lt;/h2&gt; … &lt;/section&gt;
+)}</code></pre>
+<p>"If <code>cond</code>, render <code>&lt;A /&gt;</code>, otherwise nothing" (<a href="https://react.dev/learn/conditional-rendering">react.dev</a>).</p>
+<div class="breaks">In Java, <code>&amp;&amp;</code> always gives you a <code>boolean</code>. In JS it gives you <em>one of its operands</em>. With <code>count &amp;&amp; &lt;p&gt;…&lt;/p&gt;</code>, when <code>count</code> is <code>0</code> the expression evaluates to <code>0</code>, and "React will happily render <code>0</code> rather than nothing" (<a href="https://react.dev/learn/conditional-rendering">react.dev</a>). The fix is to make the left side a real boolean: <code>count &gt; 0 &amp;&amp; …</code>. This repo does it correctly. Check for it in every diff Claude gives you.</div>
+</div>
+
+<div class="pattern">
+<h3><span class="n">④</span><code>list.map(x =&gt; &lt;X key={…}/&gt;)</code>: a loop</h3>
+<div class="pair">
+  <div><p class="label">Java</p><pre><code>courses.stream()
+  .map(c -&gt; renderCard(c))
+  .toList();</code></pre></div>
+  <div><p class="label">JSX</p><pre><code>{inProgressCourses.map((course) =&gt; (
+  &lt;Card key={course.enrollmentId}&gt;
+    {course.courseTitle}
+  &lt;/Card&gt;
+))}</code></pre></div>
+</div>
+<p><code>=&gt;</code> is Java's <code>-&gt;</code>. Each item needs a <code>key</code>, "a string or a number that uniquely identifies it among other items in that array". That's how React matches items up when the list changes. "Index as a key often leads to subtle and confusing bugs", so "use a stable ID based on the data" (<a href="https://react.dev/learn/rendering-lists">react.dev</a>).</p>
+<div class="breaks">A Java stream has nothing like <code>key</code>. Your rule when reviewing: <code>key={item.id}</code> is fine. <code>key={index}</code> deserves a second look.</div>
+</div>
+
+<div class="pattern">
+<h3><span class="n">⑤</span><code>&lt;Capitalized&gt;</code>: someone else's component</h3>
+<p>Lowercase tags such as <code>&lt;div&gt;</code>, <code>&lt;span&gt;</code> and <code>&lt;h1&gt;</code> are plain HTML. <strong>Capitalized</strong> tags are components, which means they're functions, so check the <code>import</code> lines to find where each one is defined:</p>
+<table>
+  <tr><th>Tag</th><th>Imported from</th><th>What it is</th></tr>
+  <tr><td><code>&lt;Card&gt;</code>, <code>&lt;Button&gt;</code></td><td><code>~/components/ui/*</code></td><td>Building blocks that live in this repo (shadcn/ui)</td></tr>
+  <tr><td><code>&lt;Link to="…"&gt;</code></td><td><code>react-router</code></td><td>An <code>&lt;a href&gt;</code> that navigates without a full page reload</td></tr>
+  <tr><td><code>&lt;PlayCircle&gt;</code>, <code>&lt;BookOpen&gt;</code></td><td><code>lucide-react</code></td><td>Icons</td></tr>
+</table>
+<p>Attributes on a component (<code>&lt;Button variant="outline"&gt;</code>) are called <strong>props</strong>. They're the arguments to that function, just as <code>{ loaderData }</code> is the argument to <code>Dashboard</code>.</p>
+</div>
+
+<!-- ─────────────────────────────────────────── -->
+<h2><span class="step">3 · Recall it</span>Quiz: predict what renders</h2>
+<p class="muted">Answer from memory first. Q7 checks something from Lesson 1.</p>
+
+<div class="quiz">
+  <div class="q" data-answer="2">
+    <p>1. <code>course.progress</code> is <code>40</code>. What does <code>&lt;span&gt;{course.progress}%&lt;/span&gt;</code> show?</p>
+    <div class="opts">
+      <button class="opt">{course.progress}%</button>
+      <button class="opt">course.progress%</button>
+      <button class="opt" data-why="The braces evaluate the expression and print its value, then the literal % follows.">40%</button>
+      <button class="opt">%</button>
+    </div>
+  </div>
+
+  <div class="q" data-answer="0">
+    <p>2. On the dashboard, a user has no enrolled courses, so <code>totalCourses === 0</code>. What do they see?</p>
+    <div class="opts">
+      <button class="opt" data-why="The ternary's first branch runs: the 'No enrolled courses' block with a Browse Courses button.">The empty state with Browse Courses</button>
+      <button class="opt">Both sections, each with zero cards</button>
+      <button class="opt">Nothing at all, a blank page</button>
+      <button class="opt">An error from the ErrorBoundary export</button>
+    </div>
+  </div>
+
+  <div class="q" data-answer="3">
+    <p>3. The user has 2 in-progress courses and 0 completed ones. Is the "Completed" heading shown?</p>
+    <div class="opts">
+      <button class="opt">Yes, with an empty card grid</button>
+      <button class="opt">Yes, but it shows a 0</button>
+      <button class="opt">Only after the page is refreshed</button>
+      <button class="opt" data-why="completedCourses.length > 0 is false, so && renders nothing. The left side is a boolean, so no stray 0 appears.">No, the whole section is skipped</button>
+    </div>
+  </div>
+
+  <div class="q" data-answer="1">
+    <p>4. <strong>Diff review.</strong> Claude adds <code>{course.reviewCount &amp;&amp; &lt;span&gt;{course.reviewCount} reviews&lt;/span&gt;}</code>. What appears for a course with 0 reviews?</p>
+    <div class="opts">
+      <button class="opt">Nothing, the span is skipped entirely</button>
+      <button class="opt" data-why="0 && … evaluates to 0, and React renders the number 0. Ask Claude to use reviewCount > 0 && … instead.">A stray 0 printed on the page</button>
+      <button class="opt">The text 0 reviews in span</button>
+      <button class="opt">A TypeScript compile error at build</button>
+    </div>
+  </div>
+
+  <div class="q" data-answer="2">
+    <p>5. Where does <code>&lt;Card&gt;</code> in the dashboard come from?</p>
+    <div class="opts">
+      <button class="opt">A built-in browser HTML element</button>
+      <button class="opt">A React Router navigation helper</button>
+      <button class="opt" data-why="It's capitalized, so it's a component. The import line says ~/components/ui/card, which is code in this repo.">A component imported from components/ui</button>
+      <button class="opt">A Drizzle table rendered automatically</button>
+    </div>
+  </div>
+
+  <div class="q" data-answer="3">
+    <p>6. Why does each card have <code>key={course.enrollmentId}</code>?</p>
+    <div class="opts">
+      <button class="opt">It sorts the cards by id</button>
+      <button class="opt">It saves the card to database</button>
+      <button class="opt">It sets the HTML id attribute</button>
+      <button class="opt" data-why="key identifies each list item to React so it can match items up when the list changes. A stable data id is the recommended choice.">It lets React track each item</button>
+    </div>
+  </div>
+
+  <div class="q" data-answer="1">
+    <p>7. <span class="muted">(Lesson 1)</span> Where was <code>loaderData.inProgressCourses</code> produced?</p>
+    <div class="opts">
+      <button class="opt">A fetch call made from the browser</button>
+      <button class="opt" data-why="The loader in dashboard.tsx runs on the server, calls enrollmentService and progressService, and returns the object the component receives.">The loader export in the same file</button>
+      <button class="opt">The component querying SQLite on its own</button>
+      <button class="opt">The layout route that wraps this page</button>
+    </div>
+  </div>
+</div>
+<p class="quiz-score"></p>
+
+<!-- ─────────────────────────────────────────── -->
+<h2><span class="step">4 · Do it in the repo</span>Read the in-progress card (4 min)</h2>
+<p>Open <code>app/routes/dashboard.tsx</code> and scroll to <code>inProgressCourses.map</code> (around line 145). Skip every <code>className</code>.</p>
+<ul class="task">
+  <li>Find the <code>&lt;CardFooter&gt;</code>. It has a ternary. What's the condition, and what are the two button labels?</li>
+  <li>Find the progress bar. Which value sets its width, and through which pattern?</li>
+  <li>Pick one value printed in the card, such as <code>course.completedLessons</code>, and say which <em>service</em> it ultimately comes from. Check the loader at line 20.</li>
+</ul>
+<details>
+  <summary>Check your answer</summary>
+  <ul>
+    <li>The condition is <code>course.nextLessonId ? … : …</code>. If there's a next lesson, the button says <strong>Continue Learning</strong> and links to <code>/courses/:slug/lessons/:id</code>. Otherwise it says <strong>View Course</strong>.</li>
+    <li>The width comes from <code>style={{ width: `${course.progress}%` }}</code>. That's pattern ① inside an attribute: an object literal holding a template literal.</li>
+    <li>The completed and total lesson counts come from <code>getCompletedLessonCount</code> and <code>getTotalLessonCount</code> in <strong>progressService</strong>. The loader calls them and puts the results into each course object.</li>
+  </ul>
+</details>
+
+<!-- ─────────────────────────────────────────── -->
+<h2><span class="step">5 · Steer</span>UI changes usually need a data change too</h2>
+<p>Say you want each in-progress card to show "Last studied: 3 days ago". The component can only print what's in <code>loaderData</code>, so a good prompt names <strong>every layer</strong>:</p>
+<pre><code>On /dashboard, show "Last studied: &lt;relative date&gt;" on each in-progress
+card (app/routes/dashboard.tsx, inside inProgressCourses.map).
+The data isn't in loaderData yet: add it in the loader, sourced from a
+function in app/services/progressService.ts, with a test in
+progressService.test.ts. Keep data fetching out of the component.</code></pre>
+
+<p>Then review the JSX part of the diff with these questions:</p>
+<ol>
+  <li>For every new <code>{value}</code>, can you trace it back to <code>loaderData</code> → loader → service?</li>
+  <li>For every new <code>&amp;&amp;</code>, is there a number on the left? If so, there's a stray <code>0</code> waiting to happen.</li>
+  <li>For every new <code>.map</code>, is <code>key</code> a stable id rather than the index?</li>
+  <li>Is <code>className</code> the only noise? Skip it.</li>
+</ol>
+
+<div class="source">
+  <a href="https://react.dev/learn/javascript-in-jsx-with-curly-braces"><strong>react.dev: JavaScript in JSX with Curly Braces</strong></a> (5 min). The official, short source for pattern ①. Next, read <a href="https://react.dev/learn/conditional-rendering">Conditional Rendering</a> (patterns ② and ③) and <a href="https://react.dev/learn/rendering-lists">Rendering Lists</a> (pattern ④).
+</div>
+
+<div class="ask">Stuck on something? Ask me, for example "what's the difference between <code>&lt;Link&gt;</code> and <code>&lt;a&gt;</code>?", "what is <code>Route.ComponentProps</code>?", or "walk me through a component that has state". I'm here for exactly that.</div>
+
+<p class="muted">Keep for later: <a href="../reference/reading-jsx.html">Reference: Reading JSX</a> · <a href="../reference/request-flow.html">Reference: Request flow &amp; file map</a></p>
+
+<nav class="pager">
+  <a href="./0001-follow-a-url-to-the-database.html">← 0001 Follow a URL to the database</a>
+  <span class="muted">Next: coming soon →</span>
+</nav>
+
+</main>
+</body>
+</html>

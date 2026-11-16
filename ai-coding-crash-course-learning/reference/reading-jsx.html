@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reading JSX Reference</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="ref">
+<main>
+<p class="kicker">Reference · Reviewing UI diffs</p>
+<h1>Reading JSX</h1>
+<p class="subtitle">A component is a function: <code>loaderData</code> goes in, markup comes out.</p>
+
+<h2>The five patterns</h2>
+<div class="table-wrap">
+<table>
+  <tr><th>#</th><th>JSX</th><th>Means</th><th>Java twin</th></tr>
+  <tr><td>①</td><td><code>{expr}</code>, <code>to={`/x/${id}`}</code></td><td>Print a value or pass it as an attribute</td><td><code>"..." + expr</code>, <code>formatted()</code></td></tr>
+  <tr><td>②</td><td><code>{c ? &lt;A/&gt; : &lt;B/&gt;}</code></td><td>if / else</td><td>ternary</td></tr>
+  <tr><td>③</td><td><code>{c &amp;&amp; &lt;A/&gt;}</code></td><td>if, else nothing</td><td><code>if (c)</code>, but <code>&amp;&amp;</code> returns an operand</td></tr>
+  <tr><td>④</td><td><code>{xs.map(x =&gt; &lt;X key={x.id}/&gt;)}</code></td><td>loop</td><td><code>stream().map(x -&gt; …)</code></td></tr>
+  <tr><td>⑤</td><td><code>&lt;Card variant="…"&gt;</code></td><td>Call a component with props</td><td>method call with args</td></tr>
+</table>
+</div>
+
+<div class="grid2">
+<div>
+<h2>Lowercase vs Capitalized</h2>
+<ul>
+  <li><code>&lt;div&gt; &lt;span&gt; &lt;h1&gt;</code>: plain HTML</li>
+  <li><code>&lt;Card&gt; &lt;Button&gt;</code>: <code>~/components/ui/*</code> (shadcn/ui)</li>
+  <li><code>&lt;Link to&gt;</code>: <code>react-router</code>, navigation without a full reload</li>
+  <li><code>&lt;PlayCircle&gt;</code> and similar: <code>lucide-react</code> icons</li>
+</ul>
+</div>
+<div>
+<h2>Syntax decoder</h2>
+<ul>
+  <li><code>className</code>: the HTML <code>class</code> attribute (Tailwind, skip it)</li>
+  <li><code>const {a, b} = obj</code>: destructuring</li>
+  <li><code>`text ${x}`</code>: template literal</li>
+  <li><code>=&gt;</code>: lambda (Java's <code>-&gt;</code>)</li>
+  <li><code>style={{ w: 1 }}</code>: an object literal inside <code>{ }</code></li>
+  <li><code>{/* … */}</code>: a comment in JSX</li>
+</ul>
+</div>
+</div>
+
+<h2>JSX diff review checklist</h2>
+<ol>
+  <li>Each new <code>{value}</code> traces back to <code>loaderData</code> → loader → service</li>
+  <li>No <strong>number</strong> on the left of <code>&amp;&amp;</code>. <code>count &amp;&amp; …</code> renders <code>0</code>, so use <code>count &gt; 0 &amp;&amp; …</code></li>
+  <li><code>.map</code> items have a stable <code>key</code> (an id, not the index)</li>
+  <li>No data fetching inside the component. In this repo, it belongs in the loader</li>
+</ol>
+
+<p><small>Sources: <a href="https://react.dev/learn/writing-markup-with-jsx">Writing Markup with JSX</a> · <a href="https://react.dev/learn/javascript-in-jsx-with-curly-braces">Curly Braces</a> · <a href="https://react.dev/learn/conditional-rendering">Conditional Rendering</a> · <a href="https://react.dev/learn/rendering-lists">Rendering Lists</a></small></p>
+</main>
+</body>
+</html>

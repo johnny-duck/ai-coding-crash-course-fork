@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request Flow Reference</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="ref">
+<main>
+<p class="kicker">Reference · Cadence course platform (<code>../ai-coding-crash-course</code>)</p>
+<h1>Request flow &amp; file map</h1>
+<p class="subtitle">URL → route → loader/action → service → Drizzle → SQLite → component</p>
+
+<h2>Layers</h2>
+<div class="table-wrap">
+<table>
+  <tr><th>Layer</th><th>Path</th><th>Runs on</th><th>Spring analogy</th><th>Where it breaks</th></tr>
+  <tr><td>Route table</td><td><code>app/routes.ts</code></td><td>config</td><td><code>@RequestMapping</code>s</td><td>One explicit list</td></tr>
+  <tr><td>Layout</td><td><code>app/routes/layout.app.tsx</code></td><td>server + browser</td><td>page decorator</td><td>Adds no URL segment</td></tr>
+  <tr><td>loader</td><td><code>app/routes/*.tsx</code></td><td>server</td><td><code>@GetMapping</code></td><td>Returns data, not a view name</td></tr>
+  <tr><td>action</td><td><code>app/routes/*.tsx</code></td><td>server</td><td><code>@PostMapping</code></td><td>Loaders re-run automatically afterwards</td></tr>
+  <tr><td>Component</td><td><code>export default</code> in route</td><td>server + browser</td><td>Thymeleaf template</td><td>Also runs in the browser (interactivity)</td></tr>
+  <tr><td>Resource route</td><td><code>app/routes/api.*.ts</code></td><td>server</td><td><code>@RestController</code></td><td>No component, only loader/action</td></tr>
+  <tr><td>Services</td><td><code>app/services/*Service.ts</code></td><td>server</td><td><code>@Service</code></td><td>Plain functions, imported, no DI</td></tr>
+  <tr><td>Schema</td><td><code>app/db/schema.ts</code></td><td>server</td><td><code>@Entity</code></td><td>No lazy loading or entity manager</td></tr>
+  <tr><td>Migrations</td><td><code>drizzle/*.sql</code></td><td>CLI</td><td>Flyway</td><td>Generated from the schema</td></tr>
+  <tr><td>DB</td><td><code>data.db</code> (SQLite)</td><td>file</td><td>H2 file DB</td><td>Holds up</td></tr>
+  <tr><td>Server-only helpers</td><td><code>app/lib/*.server.ts</code></td><td>server</td><td>-</td><td>The <code>.server</code> suffix keeps them out of the browser</td></tr>
+  <tr><td>UI building blocks</td><td><code>app/components/ui/*</code></td><td>server + browser</td><td>-</td><td>shadcn/ui components (Card, Button…)</td></tr>
+</table>
+</div>
+
+<div class="grid2">
+<div>
+<h2>URL → file</h2>
+<ol>
+  <li>Find the pattern in <code>app/routes.ts</code></li>
+  <li>File naming convention: <code>.</code> = <code>/</code>, <code>$x</code> = <code>:x</code></li>
+  <li><code>/courses/:slug/lessons/:lessonId</code><br>→ <code>courses.$slug.lessons.$lessonId.tsx</code></li>
+  <li><code>params.slug</code> holds the URL segment</li>
+</ol>
+</div>
+<div>
+<h2>Route module exports</h2>
+<ul>
+  <li><code>loader</code>: GET data (server)</li>
+  <li><code>action</code>: mutations (server)</li>
+  <li><code>default</code>: the component (UI)</li>
+  <li><code>meta</code>: &lt;title&gt; and meta tags</li>
+  <li><code>ErrorBoundary</code>: error UI</li>
+</ul>
+<p><small>Source: <a href="https://reactrouter.com/start/framework/route-module">React Router: Route Module</a></small></p>
+</div>
+</div>
+
+<h2>Steering prompt template</h2>
+<pre><code>On &lt;URL&gt;, &lt;symptom&gt;. The &lt;loader|action&gt; in app/routes/&lt;file&gt;.tsx
+calls &lt;fn&gt; from app/services/&lt;x&gt;Service.ts. &lt;Change&gt;.
+Verify with &lt;x&gt;Service.test.ts / npm run test / npm run typecheck.</code></pre>
+
+<h2>Commands</h2>
+<div class="table-wrap">
+<table>
+  <tr><td><code>npm run dev</code></td><td>Start the app on <code>localhost:5173</code></td></tr>
+  <tr><td><code>npm run test</code></td><td>Vitest (≈ JUnit)</td></tr>
+  <tr><td><code>npm run typecheck</code></td><td>Generate route types, then <code>tsc</code> (≈ compile step)</td></tr>
+  <tr><td><code>npm run db:generate</code> / <code>db:migrate</code></td><td>Create a migration from the schema, then apply it</td></tr>
+  <tr><td><code>npm run reset &lt;slug&gt;</code></td><td>Jump to a course lesson checkpoint</td></tr>
+</table>
+</div>
+</main>
+</body>
+</html>
